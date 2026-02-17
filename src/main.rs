@@ -3,7 +3,7 @@ use std::error::Error;
 use image::{DynamicImage, ImageBuffer, ImageReader, RgbImage, RgbaImage};
 
 fn main() {
-    let img = ImageReader::open("test.jpg").unwrap().decode().unwrap();
+    let img = ImageReader::open("test.png").unwrap().decode().unwrap();
 
     let floyd_steinberg: Vec<u8> = vec![
         0b11100000, // 7/16

@@ -18,5 +18,8 @@ both ways
  1) Large palettle 30 colors alrightish
  1) purple palettle
 
-![Input of cat (test.png)]
-![output of cat (tmp.png)]
+# Input cat
+![cat input](./test.png)
+
+# Output
+![1-bit output](./tmp.png)
