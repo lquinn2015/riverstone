@@ -22,4 +22,4 @@ both ways
 ![cat input](./test.png)
 
 # Output
-![1-bit output](./tmp.png)
+![1-bit output](./onebitcat.png)
