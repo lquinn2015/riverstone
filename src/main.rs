@@ -1,9 +1,9 @@
 use std::error::Error;
 
-use image::{DynamicImage, ImageBuffer, ImageReader, RgbImage, RgbaImage};
+use image::{DynamicImage, ImageReader, RgbImage, RgbaImage};
 
 fn main() {
-    let img = ImageReader::open("test.png").unwrap().decode().unwrap();
+    let img = ImageReader::open("gradient.png").unwrap().decode().unwrap();
 
     let floyd_steinberg: Vec<u8> = vec![
         0b11100000, // 7/16
@@ -16,6 +16,41 @@ fn main() {
         0b0010000, // 1/8
         0b0010000, // 1/8
         0b0010000, 0b0010000, 0b0010000, 0b0010000,
+    ];
+
+    // Riemersma isn't really an option at 16 bit math we'd need to
+    // promote to i16 which is 100% doable maybe even S3.12 would be enough
+    // but i'd need to rework the structurally math for that one
+
+    let jarvis: Vec<u8> = vec![
+        0b00100101, //~7/48
+        0b00011010, //~5/48
+        // -row1
+        0b00010000, // 3/48
+        0b00011010, //~5/48
+        0b00100101, //~7/48
+        0b00011010, //~5/48
+        0b00010000, // 3/48
+        // row 2
+        0b00000101, // ~1/48
+        0b00010000, // 3/48
+        0b00011010, //~5/48
+        0b00010000, // 3/48
+        0b00000101, // ~1/48
+    ];
+    let javis_map = [
+        (1isize, 0isize),
+        (2, 0),
+        (-2, 1),
+        (-1, 1),
+        (0, 1),
+        (1, 1),
+        (2, 1),
+        (-2, 2),
+        (-1, 2),
+        (0, 2),
+        (1, 2),
+        (2, 2),
     ];
 
     // GBA
@@ -43,13 +78,19 @@ fn main() {
     //    0x85347a, 0xa8487f, 0xc4668c, 0xdb84a1, 0xe6a3af, 0xebc7ca,
     //];
 
-    let algo = false;
+    let algo = 2;
     let is_rgba = false;
-    let dmatrix = if algo { akinson } else { floyd_steinberg };
 
     //let nimg = dither_img(img, floyd_steinberg, palettle).unwrap();
-    let nimg = dither_img(img, dmatrix, palettle, algo, is_rgba).unwrap();
-
+    let floyd_map = [(1, 0), (-1, 1), (0, 1), (1isize, 1isize)];
+    let akinson_map = [(1, 0), (2, 0), (-1, 1), (0, 1), (1, 1), (0isize, 2isize)];
+    let algo: (u32, &[(isize, isize)], usize, &[u8]) = match algo {
+        0 => (algo, &floyd_map, 0, &floyd_steinberg),
+        1 => (algo, &akinson_map, 2, &akinson),
+        2 => (algo, &javis_map, 1, &jarvis), // shift can be 0-1, in the middle :)
+        _ => panic!("NOOO"),
+    };
+    let nimg = dither_img(img, palettle, algo, is_rgba).unwrap();
     let file = std::fs::File::create("tmp.png").unwrap();
     nimg.write_to(file, image::ImageFormat::Png).unwrap();
 }
@@ -101,19 +142,21 @@ fn dist_u8(v0: u32, v1: u32) -> u32 {
 
 fn dither_img(
     img: DynamicImage,
-    dmatrix: Vec<u8>,
     palettle: Vec<u32>,
-    algo: bool,
+    algo: (u32, &[(isize, isize)], usize, &[u8]),
     is_rgba: bool,
 ) -> Result<DynamicImage, Box<dyn Error>> {
+    let dmatrix = algo.3;
     let num_chan: isize = if is_rgba { 4 } else { 3 };
 
     let img_buf = if is_rgba {
-        img.as_rgba8().unwrap().as_raw()
+        &img.to_rgba8() as &[u8]
     } else {
-        img.as_rgb8().unwrap().as_raw()
+        &img.to_rgb8() as &[u8]
     };
     let mut dither = vec![0xffu8; (img.width() * img.height() * num_chan as u32) as usize];
+    let err_mod = (5 * img.width() * num_chan as u32) as usize;
+    let mut err_comp: Vec<i16> = vec![0; err_mod];
     dither.clone_from_slice(&img_buf);
 
     for cy in 0..img.height() {
@@ -121,9 +164,13 @@ fn dither_img(
             let cx = cx as isize;
             let cy = cy as isize;
             let i = ((cx + cy * img.width() as isize) * num_chan) as usize;
-            let r = dither[i];
-            let g = dither[i + 1];
-            let b = dither[i + 2];
+            let ei = i % err_mod;
+            let r = ((dither[i + 0] as i16 - (err_comp[ei + 0] << algo.2) as i16 + 1) >> 1) as u8;
+            let g = ((dither[i + 1] as i16 - (err_comp[ei + 1] << algo.2) as i16 + 1) >> 1) as u8;
+            let b = ((dither[i + 2] as i16 - (err_comp[ei + 2] << algo.2) as i16 + 1) >> 1) as u8;
+            err_comp[ei] = 0;
+            err_comp[ei + 1] = 0;
+            err_comp[ei + 2] = 0;
             let rgb2 = Color::from(&[r, g, b] as &[u8]);
             let rgb = Color::from(&[r, g, b] as &[u8]).to_u32();
 
@@ -145,17 +192,11 @@ fn dither_img(
             dither[i] = col.r;
             dither[i + 1] = col.g;
             dither[i + 2] = col.b;
-            let dr: i16 = (col.r as i16 - rgb2.r as i16) >> 1;
-            let dg: i16 = (col.g as i16 - rgb2.g as i16) >> 1;
-            let db: i16 = (col.b as i16 - rgb2.b as i16) >> 1;
+            let dr: i16 = col.r as i16 - rgb2.r as i16;
+            let dg: i16 = col.g as i16 - rgb2.g as i16;
+            let db: i16 = col.b as i16 - rgb2.b as i16;
 
-            let floyd = [(1, 0), (-1, 1), (0, 1), (1isize, 1isize)];
-            let akinson = [(1, 0), (2, 0), (-1, 1), (0, 1), (1, 1), (0isize, 2isize)];
-            let pat = if algo {
-                &akinson as &[(isize, isize)]
-            } else {
-                &floyd as &[(isize, isize)]
-            };
+            let pat = algo.1;
 
             //for (mat_i, (dx, dy)) in floyd.iter().enumerate() {
             for (mat_i, (dx, dy)) in pat.iter().enumerate() {
@@ -163,14 +204,10 @@ fn dither_img(
                 let py: isize = cy + dy;
                 if in_bounds(px, py, &img) {
                     let p = ((px + py * img.width() as isize) * num_chan) as usize;
-                    dither[p] =
-                        (dither[p] as i32 - (((dr as i32) * dmatrix[mat_i] as i32 + 1) >> 8)) as u8;
-                    dither[p + 1] = (dither[p + 1] as i32
-                        - (((dg as i32) * dmatrix[mat_i] as i32 + 1) >> 8))
-                        as u8;
-                    dither[p + 2] = (dither[p + 2] as i32
-                        - (((db as i32) * dmatrix[mat_i] as i32 + 1) >> 8))
-                        as u8;
+                    let ep = p % err_mod;
+                    err_comp[ep + 0] += (((dr as i32) * dmatrix[mat_i] as i32) >> 8) as i16;
+                    err_comp[ep + 1] += (((dg as i32) * dmatrix[mat_i] as i32) >> 8) as i16;
+                    err_comp[ep + 2] += (((db as i32) * dmatrix[mat_i] as i32) >> 8) as i16;
                 }
             }
         }
