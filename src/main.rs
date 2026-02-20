@@ -1,9 +1,26 @@
 use std::error::Error;
 
-use image::{DynamicImage, ImageReader, RgbImage, RgbaImage};
+use clap::Parser;
+use image::{DynamicImage, ImageReader, RgbImage};
+
+#[derive(Parser)]
+struct Cli {
+    #[arg(short, default_value_t = 0)]
+    algo: u32,
+    #[arg(short, default_value_t = 8)]
+    round: usize,
+
+    #[arg(short, default_value_t = 0)]
+    palettle: usize,
+
+    #[arg(short, required = true)]
+    image: std::path::PathBuf,
+}
 
 fn main() {
-    let img = ImageReader::open("gradient.png").unwrap().decode().unwrap();
+    let cli = Cli::parse();
+
+    let img = ImageReader::open(cli.image).unwrap().decode().unwrap();
 
     let floyd_steinberg: Vec<u8> = vec![
         0b11100000, // 7/16
@@ -29,7 +46,7 @@ fn main() {
         0b00010000, // 3/48
         0b00011010, //~5/48
         0b00100101, //~7/48
-        0b00011010, //~5/48
+        0b00011010, //~5/4
         0b00010000, // 3/48
         // row 2
         0b00000101, // ~1/48
@@ -54,43 +71,48 @@ fn main() {
     ];
 
     // GBA
-    //let palettle: Vec<u32> = vec![0x000000, 0x005500, 0x55aa55, 0xaaffaa];
+    let palettle = match cli.palettle {
+        0 => vec![0xffffff, 0x000000],                     // 1 bit
+        1 => vec![0x000000, 0x005500, 0x55aa55, 0xaaffaa], // GBA
+        2 => vec![
+            0x001c40, 0x1e2a5f, 0x235662, 0x5464cf, 0xcb8bf0, 0x75d7da, 0x9effb8, // purple
+        ],
+        3 => vec![
+            // lot of colors
+            0x2f3b3d, 0x464b4f, 0x5c6163, 0x7b7d77, 0x999991, 0xb5b2ac, 0xd4d0cd, 0xebf0ee,
+            0x57483b, 0x6e5f4d, 0x8a7b63, 0xa3987a, 0xbdb395, 0xd6d0b0, 0x614257, 0x7a586a,
+            0x997482, 0xb39196, 0xc9adab, 0xdecbbf, 0x444a66, 0x566178, 0x6c8091, 0x839ea6,
+            0x99bab5, 0xbed4c8, 0x5e4452, 0x80575b, 0x9e7565, 0xba9273, 0xd1ae8a, 0x5c4644,
+            0x785a55, 0x9c756a, 0xb89184, 0xccad9b, 0x8f3648, 0xb04a58, 0xcc6764, 0xe38674,
+            0xe8a68e, 0xebcbbc, 0x8a3c24, 0x9e5333, 0xbd6f42, 0xd48d57, 0xe0ac6c, 0xe8cd97,
+            0x855c22, 0x9e7a36, 0xba9745, 0xccb45c, 0xe3d176, 0xe6dfa1, 0x32571d, 0x4b6c2e,
+            0x6d8740, 0x8aa355, 0xaabd68, 0xcfd496, 0x255461, 0x346c70, 0x4d8a7e, 0x68a88e,
+            0x8ac290, 0xb7d9a9, 0x255269, 0x336c7a, 0x438c91, 0x5ba9a4, 0x80c2ac, 0xabdbb8,
+            0x364996, 0x4761ad, 0x5782ba, 0x709fcf, 0x8cbade, 0xadd6e0, 0x46449c, 0x5d59b3,
+            0x7c75c9, 0xa08fdb, 0xc0aae3, 0xd6caeb, 0x683b8a, 0x864ea6, 0xa46abd, 0xc385d6,
+            0xd8a3e3, 0xe8c5e6, 0x85347a, 0xa8487f, 0xc4668c, 0xdb84a1, 0xe6a3af, 0xebc7ca,
+        ],
 
-    // cultist dither
-    //let palettle: Vec<u32> = vec![
-    //    0x001c40, 0x1e2a5f, 0x235662, 0x5464cf, 0xcb8bf0, 0x75d7da, 0x9effb8,
-    //];
-
-    // 1 bit dither - akinson
-    let palettle: Vec<u32> = vec![0xffffff, 0x000000];
-
-    ////let palettle = vec![
-    //    0x2f3b3d, 0x464b4f, 0x5c6163, 0x7b7d77, 0x999991, 0xb5b2ac, 0xd4d0cd, 0xebf0ee, 0x57483b,
-    //    0x6e5f4d, 0x8a7b63, 0xa3987a, 0xbdb395, 0xd6d0b0, 0x614257, 0x7a586a, 0x997482, 0xb39196,
-    //    0xc9adab, 0xdecbbf, 0x444a66, 0x566178, 0x6c8091, 0x839ea6, 0x99bab5, 0xbed4c8, 0x5e4452,
-    //    0x80575b, 0x9e7565, 0xba9273, 0xd1ae8a, 0x5c4644, 0x785a55, 0x9c756a, 0xb89184, 0xccad9b,
-    //    0x8f3648, 0xb04a58, 0xcc6764, 0xe38674, 0xe8a68e, 0xebcbbc, 0x8a3c24, 0x9e5333, 0xbd6f42,
-    //    0xd48d57, 0xe0ac6c, 0xe8cd97, 0x855c22, 0x9e7a36, 0xba9745, 0xccb45c, 0xe3d176, 0xe6dfa1,
-    //    0x32571d, 0x4b6c2e, 0x6d8740, 0x8aa355, 0xaabd68, 0xcfd496, 0x255461, 0x346c70, 0x4d8a7e,
-    //    0x68a88e, 0x8ac290, 0xb7d9a9, 0x255269, 0x336c7a, 0x438c91, 0x5ba9a4, 0x80c2ac, 0xabdbb8,
-    //    0x364996, 0x4761ad, 0x5782ba, 0x709fcf, 0x8cbade, 0xadd6e0, 0x46449c, 0x5d59b3, 0x7c75c9,
-    //    0xa08fdb, 0xc0aae3, 0xd6caeb, 0x683b8a, 0x864ea6, 0xa46abd, 0xc385d6, 0xd8a3e3, 0xe8c5e6,
-    //    0x85347a, 0xa8487f, 0xc4668c, 0xdb84a1, 0xe6a3af, 0xebc7ca,
-    //];
-
-    let algo = 2;
-    let is_rgba = false;
+        _ => panic!("Bad palettle"),
+    };
 
     //let nimg = dither_img(img, floyd_steinberg, palettle).unwrap();
     let floyd_map = [(1, 0), (-1, 1), (0, 1), (1isize, 1isize)];
     let akinson_map = [(1, 0), (2, 0), (-1, 1), (0, 1), (1, 1), (0isize, 2isize)];
-    let algo: (u32, &[(isize, isize)], usize, &[u8]) = match algo {
-        0 => (algo, &floyd_map, 0, &floyd_steinberg),
-        1 => (algo, &akinson_map, 2, &akinson),
-        2 => (algo, &javis_map, 1, &jarvis), // shift can be 0-1, in the middle :)
+    let algo: (u32, &[(isize, isize)], usize, &[u8]) = match cli.algo {
+        0 => (cli.algo, &floyd_map, cli.round, &floyd_steinberg),
+        1 => (cli.algo, &akinson_map, cli.round, &akinson),
+        2 => (cli.algo, &javis_map, cli.round, &jarvis),
+        3 => (cli.algo, &floyd_map, 16, &floyd_steinberg),
+        4 => (cli.algo, &floyd_map, 16, &floyd_steinberg),
         _ => panic!("NOOO"),
     };
-    let nimg = dither_img(img, palettle, algo, is_rgba).unwrap();
+
+    let nimg = if algo.0 == 4 {
+        order_bayer(img, palettle).unwrap()
+    } else {
+        dither_img(img, palettle, algo).unwrap()
+    };
     let file = std::fs::File::create("tmp.png").unwrap();
     nimg.write_to(file, image::ImageFormat::Png).unwrap();
 }
@@ -108,6 +130,14 @@ struct Color {
 impl Color {
     fn to_u32(&self) -> u32 {
         ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
+    }
+
+    fn to_fxp(&self, fp: i32) -> [i32; 3] {
+        [
+            (self.r as i32) << fp,
+            (self.g as i32) << fp,
+            (self.b as i32) << fp,
+        ]
     }
 }
 
@@ -131,6 +161,13 @@ impl From<u32> for Color {
     }
 }
 
+fn dist3(v0: &[i32], v1: &[i32]) -> i64 {
+    let d0 = i64::pow((v0[0] - v1[0]) as i64, 2);
+    let d1 = i64::pow((v0[1] - v1[1]) as i64, 2);
+    let d2 = i64::pow((v0[2] - v1[2]) as i64, 2);
+    d0 + d1 + d2
+}
+
 fn dist_u8(v0: u32, v1: u32) -> u32 {
     let c0 = Color::from(v0);
     let c1 = Color::from(v1);
@@ -140,20 +177,91 @@ fn dist_u8(v0: u32, v1: u32) -> u32 {
         + (i32::pow(c0.g as i32 - c1.b as i32, 2)) as u32
 }
 
+fn order_bayer(img: DynamicImage, palettle: Vec<u32>) -> Result<DynamicImage, Box<dyn Error>> {
+    let ibuf = &img.to_rgb8() as &[u8];
+    let ch = 3;
+    let mut dither = vec![0xffu8; (img.width() * img.height() * ch as u32) as usize];
+
+    //  def bay(M):
+    //     return np.block([[M*4,M*4+2],[M*4+3, M*4+1]])
+    //
+    //  bay(bay(np.array([[0,2],[3,1]])))
+    let bayer = [
+        0, 128, 32, 160, 8, 136, 40, 168, 2, 130, 34, 162, 10, 138, 42, 170, 192, 64, 224, 96, 200,
+        72, 232, 104, 194, 66, 226, 98, 202, 74, 234, 106, 48, 176, 16, 144, 56, 184, 24, 152, 50,
+        178, 18, 146, 58, 186, 26, 154, 240, 112, 208, 80, 248, 120, 216, 88, 242, 114, 210, 82,
+        250, 122, 218, 90, 12, 140, 44, 172, 4, 132, 36, 164, 14, 142, 46, 174, 6, 134, 38, 166,
+        204, 76, 236, 108, 196, 68, 228, 100, 206, 78, 238, 110, 198, 70, 230, 102, 60, 188, 28,
+        156, 52, 180, 20, 148, 62, 190, 30, 158, 54, 182, 22, 150, 252, 124, 220, 92, 244, 116,
+        212, 84, 254, 126, 222, 94, 246, 118, 214, 86, 3, 131, 35, 163, 11, 139, 43, 171, 1, 129,
+        33, 161, 9, 137, 41, 169, 195, 67, 227, 99, 203, 75, 235, 107, 193, 65, 225, 97, 201, 73,
+        233, 105, 51, 179, 19, 147, 59, 187, 27, 155, 49, 177, 17, 145, 57, 185, 25, 153, 243, 115,
+        211, 83, 251, 123, 219, 91, 241, 113, 209, 81, 249, 121, 217, 89, 15, 143, 47, 175, 7, 135,
+        39, 167, 13, 141, 45, 173, 5, 133, 37, 165, 207, 79, 239, 111, 199, 71, 231, 103, 205, 77,
+        237, 109, 197, 69, 229, 101, 63, 191, 31, 159, 55, 183, 23, 151, 61, 189, 29, 157, 53, 181,
+        21, 149, 255, 127, 223, 95, 247, 119, 215, 87, 253, 125, 221, 93, 245, 117, 213, 85,
+    ];
+
+    let bayer_n = 16;
+    let fxp = 1;
+
+    for y in 0..img.height() {
+        for x in 0..img.width() {
+            let x = x as usize;
+            let y = y as usize;
+            let i = ch * (x + y * img.width() as usize);
+            let ic = Color {
+                r: ibuf[i],
+                g: ibuf[i + 1],
+                b: ibuf[i + 2],
+            };
+            let rgb = ic.to_fxp(fxp);
+            // normalize the Bayer matrix by subracting  1/2 * max = 32
+            let th = (bayer[x % bayer_n + (y % bayer_n) * bayer_n] - 128) << 1;
+            let (dr, dg, db) = (rgb[0] + th, rgb[1] + th, rgb[2] + th);
+            let rgb = [dr, dg, db];
+
+            // find max palettle
+            let (sel_col, _) = palettle.iter().skip(1).fold(
+                (
+                    palettle[0],
+                    dist3(
+                        &rgb as &[i32],
+                        &Color::from(palettle[0]).to_fxp(fxp) as &[i32],
+                    ),
+                ),
+                |acc, nc| {
+                    let dist = dist3(&rgb as &[i32], &Color::from(*nc).to_fxp(fxp));
+                    if dist < acc.1 {
+                        (*nc, dist)
+                    } else {
+                        acc
+                    }
+                },
+            );
+            let sel_col = Color::from(sel_col);
+            dither[i + 0] = sel_col.r;
+            dither[i + 1] = sel_col.g;
+            dither[i + 2] = sel_col.b;
+        }
+    }
+
+    let mut rimg = RgbImage::new(img.width(), img.height());
+    rimg.copy_from_slice(&dither);
+    let rimg = DynamicImage::ImageRgb8(rimg);
+    Ok(rimg)
+}
+
 fn dither_img(
     img: DynamicImage,
     palettle: Vec<u32>,
     algo: (u32, &[(isize, isize)], usize, &[u8]),
-    is_rgba: bool,
 ) -> Result<DynamicImage, Box<dyn Error>> {
     let dmatrix = algo.3;
-    let num_chan: isize = if is_rgba { 4 } else { 3 };
 
-    let img_buf = if is_rgba {
-        &img.to_rgba8() as &[u8]
-    } else {
-        &img.to_rgb8() as &[u8]
-    };
+    let img_buf = &img.to_rgb8() as &[u8];
+    let num_chan: isize = 3;
+
     let mut dither = vec![0xffu8; (img.width() * img.height() * num_chan as u32) as usize];
     let err_mod = (5 * img.width() * num_chan as u32) as usize;
     let mut err_comp: Vec<i16> = vec![0; err_mod];
@@ -165,9 +273,16 @@ fn dither_img(
             let cy = cy as isize;
             let i = ((cx + cy * img.width() as isize) * num_chan) as usize;
             let ei = i % err_mod;
-            let r = ((dither[i + 0] as i16 - (err_comp[ei + 0] << algo.2) as i16 + 1) >> 1) as u8;
-            let g = ((dither[i + 1] as i16 - (err_comp[ei + 1] << algo.2) as i16 + 1) >> 1) as u8;
-            let b = ((dither[i + 2] as i16 - (err_comp[ei + 2] << algo.2) as i16 + 1) >> 1) as u8;
+
+            if algo.0 == 3 {
+                err_comp[ei + 0] = 127;
+                err_comp[ei + 1] = 127;
+                err_comp[ei + 2] = 127;
+            }
+
+            let r = ((dither[i + 0] as i16 - (err_comp[ei + 0] >> algo.2) as i16) >> 1) as u8;
+            let g = ((dither[i + 1] as i16 - (err_comp[ei + 1] >> algo.2) as i16) >> 1) as u8;
+            let b = ((dither[i + 2] as i16 - (err_comp[ei + 2] >> algo.2) as i16) >> 1) as u8;
             err_comp[ei] = 0;
             err_comp[ei + 1] = 0;
             err_comp[ei + 2] = 0;
@@ -205,22 +320,15 @@ fn dither_img(
                 if in_bounds(px, py, &img) {
                     let p = ((px + py * img.width() as isize) * num_chan) as usize;
                     let ep = p % err_mod;
-                    err_comp[ep + 0] += (((dr as i32) * dmatrix[mat_i] as i32) >> 8) as i16;
-                    err_comp[ep + 1] += (((dg as i32) * dmatrix[mat_i] as i32) >> 8) as i16;
-                    err_comp[ep + 2] += (((db as i32) * dmatrix[mat_i] as i32) >> 8) as i16;
+                    err_comp[ep + 0] += (((dr as i32) * dmatrix[mat_i] as i32) >> 2) as i16;
+                    err_comp[ep + 1] += (((dg as i32) * dmatrix[mat_i] as i32) >> 2) as i16;
+                    err_comp[ep + 2] += (((db as i32) * dmatrix[mat_i] as i32) >> 2) as i16;
                 }
             }
         }
     }
-    if is_rgba {
-        let mut rimg = RgbaImage::new(img.width(), img.height());
-        rimg.copy_from_slice(&dither);
-        let rimg = DynamicImage::ImageRgba8(rimg);
-        Ok(rimg)
-    } else {
-        let mut rimg = RgbImage::new(img.width(), img.height());
-        rimg.copy_from_slice(&dither);
-        let rimg = DynamicImage::ImageRgb8(rimg);
-        Ok(rimg)
-    }
+    let mut rimg = RgbImage::new(img.width(), img.height());
+    rimg.copy_from_slice(&dither);
+    let rimg = DynamicImage::ImageRgb8(rimg);
+    Ok(rimg)
 }
